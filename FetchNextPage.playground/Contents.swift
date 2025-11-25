@@ -8,11 +8,10 @@ class viewModel {
     
     func test() async {
         
-        Task { [weak self] in
+        Task {
 
-            self?.hasMorePages = true
+            hasMorePages = true
             while hasMorePages {
-                guard let self else { return }
                 let page = await fetchNextPage()
                 hasMorePages = !page.isLastPage
             }
