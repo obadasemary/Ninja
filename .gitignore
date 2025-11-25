@@ -1,0 +1,14 @@
+# Claude Code local settings
+.claude/settings.local.json
+
+# macOS
+.DS_Store
+
+# Xcode
+*.xcuserstate
+*.xcuserdatad/
+xcuserdata/
+
+# Playground timeline data
+*.playground/timeline.xctimeline
+*.playground/xcuserdata/
