@@ -17,6 +17,16 @@ struct Car {
     let engine: Engine
     
     func description() -> String {
-        return "This is a \(type) with a \(engine.horsePower) hp engine."
+        return "This car is a \(type) with a \(engine.horsePower) HP, running \(engine.fuelType) fuel."
     }
 }
+
+let myCar = Car(
+    type: .suv,
+    engine: .init(
+        horsePower: 250,
+        fuelType: "petrol"
+    )
+)
+print(myCar.description())
+
