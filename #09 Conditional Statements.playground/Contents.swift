@@ -34,4 +34,13 @@ default:
     print("The character is neither 'a' nor 'b', nor 'z'.")
 }
 
+// MARK: - Compound Cases
 
+switch someCharacter {
+    case "a", "e", "i", "o", "u":
+    print("\(someCharacter) is a vowel.")
+case "b", "c", "d", "f", "g", "h", "j", "k", "l", "m", "n", "p", "q", "r", "s", "t", "v", "w", "x", "y", "z":
+    print("\(someCharacter) is a consonant.")
+default:
+    print("\(someCharacter) isn't a letter of the alphabet.")
+}
