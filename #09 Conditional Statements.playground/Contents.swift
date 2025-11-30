@@ -12,3 +12,11 @@ if temperatureInCelsius <= 0 {
 } else if temperatureInCelsius >= 30 {
     print("It's warm today! Don't forget your sunscreen.")
 }
+
+let weatherAdvice = if temperatureInCelsius <= 0 {
+    "It's very cold!. Consider wearing a scarf."
+} else if temperatureInCelsius >= 30 {
+    "It's warm today! Don't forget your sunscreen."
+} else {
+    "It's not that cold or warm today. Enjoy your day!"
+}
