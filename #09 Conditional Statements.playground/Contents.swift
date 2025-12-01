@@ -77,3 +77,16 @@ case (0, let y):
 case (let x, let y):
     print("The point is somewhere else at coordinates (\(x), \(y)).")
 }
+
+// MARK: - Tuples & Where
+
+let somePoint = (1, -1)
+
+switch somePoint {
+case let (x, y) where x == y:
+    print("(\(x), \(y)) is on the line x == y.")
+case let (x, y) where x == -y:
+    print("(\(x), \(y)) is on the line x == -y.")
+case let (x, y):
+    print("(\(x), \(y)) is just some arbitrary point.")
+}
