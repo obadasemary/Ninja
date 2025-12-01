@@ -65,4 +65,15 @@ default:
     fatalError("Unexpectedly large count")
 }
 
-// MARK:
+// MARK: - Value Binding
+
+let anotherPoint = (2, 0)
+
+switch anotherPoint {
+case (let x, 0):
+    print("The point is on the x-axis with an x-coordinate of \(x).")
+case (0, let y):
+    print("The point is on the y-axis with a y-coordinate of \(y).")
+case (let x, let y):
+    print("The point is somewhere else at coordinates (\(x), \(y)).")
+}
