@@ -24,7 +24,7 @@ let weatherAdvice = if temperatureInCelsius <= 0 {
 let someCharacter: Character = "z"
 
 switch someCharacter {
-    case "a":
+case "a":
     print("The character is 'a'.")
 case "b":
     print("The character is 'b'.")
@@ -37,10 +37,32 @@ default:
 // MARK: - Compound Cases
 
 switch someCharacter {
-    case "a", "e", "i", "o", "u":
+case "a", "e", "i", "o", "u":
     print("\(someCharacter) is a vowel.")
 case "b", "c", "d", "f", "g", "h", "j", "k", "l", "m", "n", "p", "q", "r", "s", "t", "v", "w", "x", "y", "z":
     print("\(someCharacter) is a consonant.")
 default:
     print("\(someCharacter) isn't a letter of the alphabet.")
 }
+
+// MARK: - Ranges is Switch
+
+let approximateCount: Int = 62
+let naturalCount: String
+
+switch approximateCount {
+case 0:
+    naturalCount = "no"
+case 1..<5:
+    naturalCount = "a few"
+case 5..<12:
+    naturalCount = "several"
+case 12..<100:
+    naturalCount = "dozens (or more)"
+case 100...:
+    naturalCount = "hundreds (or more)"
+default:
+    fatalError("Unexpectedly large count")
+}
+
+// MARK:
