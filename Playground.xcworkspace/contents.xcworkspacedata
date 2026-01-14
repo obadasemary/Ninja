@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Workspace
+   version = "1.0">
+   <FileRef
+      location = "group: Sezzle Inc.playground">
+   </FileRef>
+   <FileRef
+      location = "group:#01 Constants &amp; Variables.playground">
+   </FileRef>
+   <FileRef
+      location = "group:#02 Print &amp; Comment.playground">
+   </FileRef>
+   <FileRef
+      location = "group:#03 Operators.playground">
+   </FileRef>
+   <FileRef
+      location = "group:#04 String &amp; Character.playground">
+   </FileRef>
+   <FileRef
+      location = "group:#05 Array.playground">
+   </FileRef>
+   <FileRef
+      location = "group:#06 Set.playground">
+   </FileRef>
+   <FileRef
+      location = "group:#07 Dictionary.playground">
+   </FileRef>
+   <FileRef
+      location = "group:#08 Loops.playground">
+   </FileRef>
+   <FileRef
+      location = "group:#09 Conditional Statements.playground">
+   </FileRef>
+   <FileRef
+      location = "group:#10 Control Transfer Statements.playground">
+   </FileRef>
+   <FileRef
+      location = "group:#33 Nested Types.playground">
+   </FileRef>
+   <FileRef
+      location = "group:CLAUDE.md">
+   </FileRef>
+   <FileRef
+      location = "group:coderbyte.playground">
+   </FileRef>
+   <FileRef
+      location = "group:Count Elements Greater Than Previous Average.playground">
+   </FileRef>
+   <FileRef
+      location = "group:FetchNextPage.playground">
+   </FileRef>
+   <FileRef
+      location = "group:MyPlayground.playground">
+   </FileRef>
+   <FileRef
+      location = "group:Ninja.playground">
+   </FileRef>
+   <FileRef
+      location = "group:Yassir.playground">
+   </FileRef>
+</Workspace>
