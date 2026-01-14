@@ -1,5 +1,4 @@
-import UIKit
-import SwiftUI
+import Foundation
 
 var greeting = "Hello, playground"
 
@@ -23,6 +22,10 @@ class MyClass {
     init(text: String) {
         self.text = text
     }
+    
+    func updateText(to newText: String) {
+        self.text = newText
+    }
 }
 
 private extension StructClassActorBootcamp {
@@ -31,7 +34,10 @@ private extension StructClassActorBootcamp {
 //        structTest1()
 //        printDivider()
 //        classTest1()
+//        printDivider()
         structTest2()
+        printDivider()
+        classTest2()
     }
     
     func printDivider() {
@@ -43,7 +49,7 @@ private extension StructClassActorBootcamp {
     }
     
     func structTest1() {
-        print("structTest1 started!")
+        print("structTest1 started! \n")
         let objectA = MyStruct(text: "strating title!")
         print("Object A: \(objectA.text)")
         
@@ -59,7 +65,7 @@ private extension StructClassActorBootcamp {
     }
     
     func classTest1() {
-        print("classTest1 started!")
+        print("classTest1 started! \n")
         let objectA = MyClass(text: "strating title!")
         print("Object A: \(objectA.text)")
         
@@ -84,7 +90,11 @@ struct CustomStruct {
 }
 
 struct MutatingStruct {
-    var text: String
+    private(set) var text: String
+    
+    init(text: String) {
+        self.text = text
+    }
     
     mutating func updateText(to newText: String) {
         self.text = newText
@@ -94,7 +104,7 @@ struct MutatingStruct {
 private extension StructClassActorBootcamp {
     
     func structTest2() {
-        print("structTest 2 !")
+        print("structTest 2 !\n")
         
         var struct1 = MyStruct(text: "Title 1")
         print("Struct 1: ", struct1.text)
@@ -119,4 +129,26 @@ private extension StructClassActorBootcamp {
     }
 }
 
-
+private extension StructClassActorBootcamp {
+    
+    func classTest2() {
+        print("classTest 2 !\n")
+        
+        let class1 = MyClass(text: "Title 1")
+        print("Class 1: ", class1.text)
+        class1.text = "Title 2"
+        print("Class 1: ", class1.text)
+        
+        let class2 = MyClass(text: "Title 1")
+        print("Class 2: ", class2.text)
+        class2.updateText(to: "Title 2")
+        print("Class 2: ", class2.text)
+        
+        let class3 = class2
+        print("Class 2: ", class2.text)
+        print("Class 3: ", class3.text)
+        class3.updateText(to: "Title 3")
+        print("Class 2: ", class2.text)
+        print("Class 3: ", class3.text)
+    }
+}
