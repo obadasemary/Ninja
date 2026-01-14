@@ -41,6 +41,9 @@
       location = "group:CLAUDE.md">
    </FileRef>
    <FileRef
+      location = "group:StructClassActorBootcamp.playground">
+   </FileRef>
+   <FileRef
       location = "group:coderbyte.playground">
    </FileRef>
    <FileRef
