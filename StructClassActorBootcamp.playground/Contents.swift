@@ -28,13 +28,27 @@ class MyClass {
     }
 }
 
+actor MyActor {
+    var text: String
+    
+    init(text: String) {
+        self.text = text
+    }
+    
+    func updateText(to newText: String) {
+        self.text = newText
+    }
+}
+
 private extension StructClassActorBootcamp {
     
     func runTest() {
-//        structTest1()
-//        printDivider()
-//        classTest1()
-//        printDivider()
+        structTest1()
+        printDivider()
+        classTest1()
+        printDivider()
+        actorTest1()
+        printDivider()
         structTest2()
         printDivider()
         classTest2()
@@ -78,6 +92,24 @@ private extension StructClassActorBootcamp {
         
         print("Object A: \(objectA.text)")
         print("Object B: \(objectB.text)")
+    }
+    
+    func actorTest1() {
+        Task {
+            print("actorTest1 started! \n")
+            let actorA = MyActor(text: "strating title!")
+            await print("Actor A: \(actorA.text)")
+            
+            print("Pass the REFERENCES of objectA to objectB")
+            let actorB = actorA
+            await print("Actor B: \(actorB.text)")
+            
+            await actorB.updateText(to: "changed title!")
+            print("Actor B: title changed")
+            
+            await print("Object A: \(actorA.text)")
+            await print("Object B: \(actorB.text)")
+        }
     }
 }
 
