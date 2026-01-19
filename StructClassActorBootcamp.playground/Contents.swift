@@ -1,3 +1,78 @@
+/*
+
+ VALUE TYPES VS REFERENCE TYPES
+ ================================
+
+ VALUE TYPES:
+ ------------
+ - Stored in Stack memory
+ - When copied, a new independent copy is created
+ - Changes to the copy do NOT affect the original
+ - Thread-safe by default (each thread gets its own copy)
+ - Examples: Struct, Enum, Tuple
+ - Swift's standard types are value types: Int, String, Array, Dictionary, Set
+
+ Key Characteristics:
+ • Copy-on-assignment: var b = a creates a new copy
+ • Faster allocation/deallocation (stack memory)
+ • No memory leaks or retain cycles
+ • Predictable behavior in concurrent code
+ • Use 'mutating' keyword to modify properties in methods
+
+ REFERENCE TYPES:
+ ----------------
+ - Stored in Heap memory
+ - When copied, only the reference (pointer) is copied
+ - Multiple variables can point to the same instance
+ - Changes through any reference affect all references
+ - Examples: Class, Actor, Closure
+ - Requires memory management (ARC - Automatic Reference Counting)
+
+ Key Characteristics:
+ • Copy-on-assignment: var b = a creates a new reference to same instance
+ • Slower allocation/deallocation (heap memory)
+ • Can have retain cycles (use weak/unowned references)
+ • Requires synchronization for thread safety
+ • Can modify properties through 'let' constant references
+ • Supports inheritance and polymorphism
+
+ WHEN TO USE WHICH?
+ ------------------
+ Use VALUE TYPES (Struct) when:
+ • Data represents a simple value or collection of values
+ • You want independent copies when passing around
+ • Equality means "same values" (use Equatable)
+ • You need thread-safety without locks
+ • Default Swift choice for most data models
+
+ Use REFERENCE TYPES (Class) when:
+ • You need a shared, mutable state
+ • You need inheritance or polymorphism
+ • Identity matters more than equality (=== vs ==)
+ • Working with Objective-C APIs
+ • Implementing delegation patterns
+
+ Use ACTOR when:
+ • You need a reference type with built-in thread-safety
+ • Managing shared mutable state in concurrent code
+ • Protecting data from race conditions
+ • Each actor has its own serial executor
+
+ MEMORY BEHAVIOR:
+ ----------------
+ Value Type (Struct):
+   var a = MyStruct()  // Stored in stack
+   var b = a           // New copy created in stack
+   b.modify()          // Only b is affected
+
+ Reference Type (Class):
+   let a = MyClass()   // Instance in heap, reference in stack
+   let b = a           // New reference to same heap instance
+   b.modify()          // Both a and b see the change
+
+
+*/
+
 import Foundation
 
 var greeting = "Hello, playground"
