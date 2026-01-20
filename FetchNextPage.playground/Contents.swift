@@ -1,3 +1,9 @@
+/*
+    Fetch Next Page Example
+    
+    This example demonstrates how to fetch paginated data asynchronously. The `viewModel` class contains a method `test` that continuously fetches the next page of data until there are no more pages left. The `fetchNextPage` function simulates an asynchronous network call to retrieve the next page.
+*/
+
 import UIKit
 
 var greeting = "Hello, playground"
