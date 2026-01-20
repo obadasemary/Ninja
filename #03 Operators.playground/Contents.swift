@@ -1,3 +1,11 @@
+/*
+    Operators
+     
+    Operators are special symbols or phrases that you use to check, change, or combine values. Swift provides a variety of operators, including arithmetic, assignment, comparison, logical, and range operators.
+     
+    This example demonstrates the use of different types of operators in Swift, including arithmetic operations, assignment operations, comparison operations, the ternary conditional operator, range operators, and logical operations.
+*/
+
 import Foundation
 
 var greeting = "Hello, playground"
