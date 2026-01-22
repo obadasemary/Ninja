@@ -26,6 +26,7 @@ The repository contains standalone Xcode Playground files organized by topic:
 - **Advanced Concepts Playgrounds**: Protocol-oriented programming and architecture patterns
   - `ProtocolsBootcamp.playground` - Protocol definitions, extensions, and protocol-oriented design
   - `StructClassActorBootcamp.playground` - Struct vs Class vs Actor, value/reference types, and concurrency
+  - `NetworkingArchitecture.playground` - Clean Architecture networking with Repository pattern, three async patterns (Completion Handlers, Combine, Async/Await), error handling, dependency injection, and comprehensive unit tests
 
 - **Practice Playgrounds**: Algorithm and coding challenge implementations
   - `Ninja.playground` - Username validation and set intersection algorithms
