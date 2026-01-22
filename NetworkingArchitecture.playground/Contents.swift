@@ -383,6 +383,438 @@ class GetUserPostsUseCase: GetUserPostsUseCaseprotocol {
     }
 }
 
+// MARK: - Unit Tests
+
+import XCTest
+
+// MARK: - Mock Network Service
+
+class MockNetworkService: NetworkServiceProtocol {
+    var shouldReturnError = false
+    var mockError: NetworkError = .invalidResponse
+    var mockUsers: [User] = []
+    var mockPosts: [Post] = []
+
+    // Completion Handler
+    func request<T: Decodable>(endpoint: String, completion: @escaping (Result<T, NetworkError>) -> Void) {
+        if shouldReturnError {
+            completion(.failure(mockError))
+            return
+        }
+
+        if T.self == [User].self {
+            completion(.success(mockUsers as! T))
+        } else if T.self == User.self {
+            completion(.success(mockUsers.first as! T))
+        } else if T.self == [Post].self {
+            completion(.success(mockPosts as! T))
+        }
+    }
+
+    // Combine
+    func requestPublisher<T: Decodable>(endpoint: String) -> AnyPublisher<T, NetworkError> {
+        if shouldReturnError {
+            return Fail(error: mockError).eraseToAnyPublisher()
+        }
+
+        if T.self == [User].self {
+            return Just(mockUsers as! T)
+                .setFailureType(to: NetworkError.self)
+                .eraseToAnyPublisher()
+        } else if T.self == User.self {
+            return Just(mockUsers.first as! T)
+                .setFailureType(to: NetworkError.self)
+                .eraseToAnyPublisher()
+        } else if T.self == [Post].self {
+            return Just(mockPosts as! T)
+                .setFailureType(to: NetworkError.self)
+                .eraseToAnyPublisher()
+        }
+
+        return Fail(error: NetworkError.invalidResponse).eraseToAnyPublisher()
+    }
+
+    // Async/Await
+    func requestAsync<T: Decodable>(endpoint: String) async throws -> T {
+        if shouldReturnError {
+            throw mockError
+        }
+
+        if T.self == [User].self {
+            return mockUsers as! T
+        } else if T.self == User.self {
+            return mockUsers.first as! T
+        } else if T.self == [Post].self {
+            return mockPosts as! T
+        }
+
+        throw NetworkError.invalidResponse
+    }
+}
+
+// MARK: - Test Cases
+
+class UserRepositoryTests: XCTestCase {
+    var mockNetworkService: MockNetworkService!
+    var repository: UserRepository!
+
+    override func setUp() {
+        super.setUp()
+        mockNetworkService = MockNetworkService()
+        repository = UserRepository(networkService: mockNetworkService)
+    }
+
+    override func tearDown() {
+        mockNetworkService = nil
+        repository = nil
+        super.tearDown()
+    }
+
+    // MARK: - Completion Handler Tests
+
+    func testGetUsersSuccess() {
+        let expectation = XCTestExpectation(description: "Get users successfully")
+
+        let mockUser = User(id: 1, name: "John Doe", email: "john@example.com", username: "johndoe")
+        mockNetworkService.mockUsers = [mockUser]
+
+        repository.getUsers { result in
+            switch result {
+            case .success(let users):
+                XCTAssertEqual(users.count, 1)
+                XCTAssertEqual(users.first?.name, "John Doe")
+                expectation.fulfill()
+            case .failure:
+                XCTFail("Expected success but got failure")
+            }
+        }
+
+        wait(for: [expectation], timeout: 1.0)
+    }
+
+    func testGetUsersFailure() {
+        let expectation = XCTestExpectation(description: "Get users failure")
+
+        mockNetworkService.shouldReturnError = true
+        mockNetworkService.mockError = .httpError(statusCode: 500)
+
+        repository.getUsers { result in
+            switch result {
+            case .success:
+                XCTFail("Expected failure but got success")
+            case .failure(let error):
+                if case .httpError(let statusCode) = error {
+                    XCTAssertEqual(statusCode, 500)
+                    expectation.fulfill()
+                }
+            }
+        }
+
+        wait(for: [expectation], timeout: 1.0)
+    }
+
+    // MARK: - Async/Await Tests
+
+    func testGetUsersAsync() async throws {
+        let mockUser = User(id: 1, name: "Jane Doe", email: "jane@example.com", username: "janedoe")
+        mockNetworkService.mockUsers = [mockUser]
+
+        let users = try await repository.getUsersAsync()
+
+        XCTAssertEqual(users.count, 1)
+        XCTAssertEqual(users.first?.name, "Jane Doe")
+        XCTAssertEqual(users.first?.email, "jane@example.com")
+    }
+
+    func testGetUserAsync() async throws {
+        let mockUser = User(id: 1, name: "Test User", email: "test@example.com", username: "testuser")
+        mockNetworkService.mockUsers = [mockUser]
+
+        let user = try await repository.getUserAsync(id: 1)
+
+        XCTAssertEqual(user.id, 1)
+        XCTAssertEqual(user.name, "Test User")
+    }
+
+    func testGetUsersAsyncError() async {
+        mockNetworkService.shouldReturnError = true
+        mockNetworkService.mockError = .networkError(NSError(domain: "test", code: -1))
+
+        do {
+            _ = try await repository.getUsersAsync()
+            XCTFail("Expected error to be thrown")
+        } catch {
+            XCTAssertTrue(error is NetworkError)
+        }
+    }
+
+    // MARK: - Combine Tests
+
+    func testGetUsersPublisher() {
+        let expectation = XCTestExpectation(description: "Get users via Combine")
+        var cancellables = Set<AnyCancellable>()
+
+        let mockUser = User(id: 1, name: "Combine User", email: "combine@example.com", username: "combineuser")
+        mockNetworkService.mockUsers = [mockUser]
+
+        repository.getUsersPublisher()
+            .sink(
+                receiveCompletion: { completion in
+                    if case .failure = completion {
+                        XCTFail("Expected success but got failure")
+                    }
+                },
+                receiveValue: { users in
+                    XCTAssertEqual(users.count, 1)
+                    XCTAssertEqual(users.first?.name, "Combine User")
+                    expectation.fulfill()
+                }
+            )
+            .store(in: &cancellables)
+
+        wait(for: [expectation], timeout: 1.0)
+    }
+}
+
+class PostRepositoryTests: XCTestCase {
+    var mockNetworkService: MockNetworkService!
+    var repository: PostRepository!
+
+    override func setUp() {
+        super.setUp()
+        mockNetworkService = MockNetworkService()
+        repository = PostRepository(networkService: mockNetworkService)
+    }
+
+    override func tearDown() {
+        mockNetworkService = nil
+        repository = nil
+        super.tearDown()
+    }
+
+    func testGetPostsAsync() async throws {
+        let mockPost = Post(userId: 1, id: 1, title: "Test Post", body: "Test Body")
+        mockNetworkService.mockPosts = [mockPost]
+
+        let posts = try await repository.getPostsAsync()
+
+        XCTAssertEqual(posts.count, 1)
+        XCTAssertEqual(posts.first?.title, "Test Post")
+        XCTAssertEqual(posts.first?.userId, 1)
+    }
+
+    func testGetUserPostsAsync() async throws {
+        let mockPost1 = Post(userId: 1, id: 1, title: "Post 1", body: "Body 1")
+        let mockPost2 = Post(userId: 1, id: 2, title: "Post 2", body: "Body 2")
+        mockNetworkService.mockPosts = [mockPost1, mockPost2]
+
+        let posts = try await repository.getUserPostsAsync(userId: 1)
+
+        XCTAssertEqual(posts.count, 2)
+        XCTAssertEqual(posts.first?.userId, 1)
+    }
+}
+
+class GetUsersUseCaseTests: XCTestCase {
+    var mockNetworkService: MockNetworkService!
+    var userRepository: UserRepository!
+    var useCase: GetUsersUseCase!
+
+    override func setUp() {
+        super.setUp()
+        mockNetworkService = MockNetworkService()
+        userRepository = UserRepository(networkService: mockNetworkService)
+        useCase = GetUsersUseCase(userRepository: userRepository)
+    }
+
+    override func tearDown() {
+        mockNetworkService = nil
+        userRepository = nil
+        useCase = nil
+        super.tearDown()
+    }
+
+    func testExecuteFiltersEmptyEmails() {
+        let expectation = XCTestExpectation(description: "Use case filters users")
+
+        let user1 = User(id: 1, name: "Valid User", email: "valid@example.com", username: "valid")
+        let user2 = User(id: 2, name: "Invalid User", email: "", username: "invalid")
+        mockNetworkService.mockUsers = [user1, user2]
+
+        useCase.execute { result in
+            switch result {
+            case .success(let users):
+                XCTAssertEqual(users.count, 1, "Should filter out users with empty emails")
+                XCTAssertEqual(users.first?.name, "Valid User")
+                expectation.fulfill()
+            case .failure:
+                XCTFail("Expected success but got failure")
+            }
+        }
+
+        wait(for: [expectation], timeout: 1.0)
+    }
+
+    func testExecuteAsync() async throws {
+        let user1 = User(id: 1, name: "User 1", email: "user1@example.com", username: "user1")
+        let user2 = User(id: 2, name: "User 2", email: "user2@example.com", username: "user2")
+        mockNetworkService.mockUsers = [user1, user2]
+
+        let users = try await useCase.executeAsync()
+
+        XCTAssertEqual(users.count, 2)
+        XCTAssertTrue(users.allSatisfy { !$0.email.isEmpty })
+    }
+
+    func testExecutePublisher() {
+        let expectation = XCTestExpectation(description: "Use case Combine test")
+        var cancellables = Set<AnyCancellable>()
+
+        let user = User(id: 1, name: "Test", email: "test@example.com", username: "test")
+        mockNetworkService.mockUsers = [user]
+
+        useCase.executePublisher()
+            .sink(
+                receiveCompletion: { _ in },
+                receiveValue: { users in
+                    XCTAssertEqual(users.count, 1)
+                    expectation.fulfill()
+                }
+            )
+            .store(in: &cancellables)
+
+        wait(for: [expectation], timeout: 1.0)
+    }
+}
+
+class GetUserPostsUseCaseTests: XCTestCase {
+    var mockNetworkService: MockNetworkService!
+    var postRepository: PostRepository!
+    var useCase: GetUserPostsUseCase!
+
+    override func setUp() {
+        super.setUp()
+        mockNetworkService = MockNetworkService()
+        postRepository = PostRepository(networkService: mockNetworkService)
+        useCase = GetUserPostsUseCase(postRepository: postRepository)
+    }
+
+    override func tearDown() {
+        mockNetworkService = nil
+        postRepository = nil
+        useCase = nil
+        super.tearDown()
+    }
+
+    func testExecuteSortsPosts() {
+        let expectation = XCTestExpectation(description: "Use case sorts posts")
+
+        let post1 = Post(userId: 1, id: 1, title: "Zebra", body: "Body 1")
+        let post2 = Post(userId: 1, id: 2, title: "Apple", body: "Body 2")
+        let post3 = Post(userId: 1, id: 3, title: "Mango", body: "Body 3")
+        mockNetworkService.mockPosts = [post1, post2, post3]
+
+        useCase.execute(userId: 1) { result in
+            switch result {
+            case .success(let posts):
+                XCTAssertEqual(posts.count, 3)
+                XCTAssertEqual(posts[0].title, "Apple", "Posts should be sorted alphabetically")
+                XCTAssertEqual(posts[1].title, "Mango")
+                XCTAssertEqual(posts[2].title, "Zebra")
+                expectation.fulfill()
+            case .failure:
+                XCTFail("Expected success but got failure")
+            }
+        }
+
+        wait(for: [expectation], timeout: 1.0)
+    }
+
+    func testExecuteAsync() async throws {
+        let post1 = Post(userId: 1, id: 1, title: "C Post", body: "Body")
+        let post2 = Post(userId: 1, id: 2, title: "A Post", body: "Body")
+        let post3 = Post(userId: 1, id: 3, title: "B Post", body: "Body")
+        mockNetworkService.mockPosts = [post1, post2, post3]
+
+        let posts = try await useCase.executeAsync(userId: 1)
+
+        XCTAssertEqual(posts.count, 3)
+        XCTAssertEqual(posts[0].title, "A Post")
+        XCTAssertEqual(posts[1].title, "B Post")
+        XCTAssertEqual(posts[2].title, "C Post")
+    }
+}
+
+// MARK: - Test Runner
+
+class TestObserver: NSObject, XCTestObservation {
+    var testsPassed = 0
+    var testsFailed = 0
+    var currentSuite = ""
+    var suiteResults: [String: (passed: Int, failed: Int)] = [:]
+
+    func testBundleWillStart(_ testBundle: Bundle) {
+        print("\n" + String(repeating: "=", count: 50))
+        print("🧪 RUNNING UNIT TESTS")
+        print(String(repeating: "=", count: 50) + "\n")
+    }
+
+    func testSuiteWillStart(_ testSuite: XCTestSuite) {
+        if testSuite.name.contains("Tests") {
+            currentSuite = testSuite.name
+            suiteResults[currentSuite] = (passed: 0, failed: 0)
+        }
+    }
+
+    func testCaseDidFinish(_ testCase: XCTestCase) {
+        if testCase.testRun?.hasSucceeded ?? false {
+            testsPassed += 1
+            if let current = suiteResults[currentSuite] {
+                suiteResults[currentSuite] = (current.passed + 1, current.failed)
+            }
+        } else {
+            testsFailed += 1
+            if let current = suiteResults[currentSuite] {
+                suiteResults[currentSuite] = (current.passed, current.failed + 1)
+            }
+        }
+    }
+
+    func testBundleDidFinish(_ testBundle: Bundle) {
+        // Print suite results
+        for (suiteName, results) in suiteResults.sorted(by: { $0.key < $1.key }) {
+            let total = results.passed + results.failed
+            let status = results.failed == 0 ? "✅" : "❌"
+            print("\(status) \(suiteName): \(results.passed)/\(total) passed")
+        }
+
+        let total = testsPassed + testsFailed
+        print("\n" + String(repeating: "-", count: 50))
+        print("📊 Test Summary:")
+        print("   Total: \(total)")
+        print("   ✅ Passed: \(testsPassed)")
+        print("   ❌ Failed: \(testsFailed)")
+        print(String(repeating: "=", count: 50) + "\n")
+    }
+}
+
+// Run unit tests first
+let observer = TestObserver()
+XCTestObservationCenter.shared.addTestObserver(observer)
+
+// Run all test suites
+let testSuites: [XCTestCase.Type] = [
+    UserRepositoryTests.self,
+    PostRepositoryTests.self,
+    GetUsersUseCaseTests.self,
+    GetUserPostsUseCaseTests.self
+]
+
+for testSuiteType in testSuites {
+    let suite = XCTestSuite(forTestCaseClass: testSuiteType)
+    suite.run()
+}
+
 // MARK: - Usage Examples
 
 print("=== Networking Architecture Playground ===\n")
