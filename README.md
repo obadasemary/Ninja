@@ -30,6 +30,7 @@ Protocol-oriented programming and architecture patterns:
 
 - **[ProtocolsBootcamp.playground](ProtocolsBootcamp.playground)** - Protocol definitions, extensions, and protocol-oriented design
 - **[StructClassActorBootcamp.playground](StructClassActorBootcamp.playground)** - Struct vs Class vs Actor, value/reference types, and concurrency
+- **[NetworkingArchitecture.playground](NetworkingArchitecture.playground)** - Clean Architecture networking with Repository pattern, three async patterns (Completion Handlers, Combine, Async/Await), error handling, dependency injection, and comprehensive unit tests
 
 ### Practice Playgrounds
 
