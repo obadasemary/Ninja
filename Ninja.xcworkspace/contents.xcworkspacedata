@@ -47,6 +47,9 @@
       location = "group:StructClassActorBootcamp.playground">
    </FileRef>
    <FileRef
+      location = "group:NetworkingArchitecture.playground">
+   </FileRef>
+   <FileRef
       location = "group:coderbyte.playground">
    </FileRef>
    <FileRef
