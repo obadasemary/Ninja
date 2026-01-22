@@ -10,11 +10,26 @@ This repository contains multiple Xcode Playground files that cover various Swif
 
 ### Tutorial Playgrounds
 
-Basic Swift concepts for beginners:
+Basic Swift concepts and language features:
 
-- **[#01 Constants & Variables.playground](#01-constants--variablesplayground)** - Variable declarations, constants, and type annotations
-- **[#02 Print & Comment.playground](#02-print--commentplayground)** - Print statements, string interpolation, and comments
-- **[#03 Operators.playground](#03-operatorsplayground)** - Arithmetic, assignment, and basic operators
+- **[#01 Constants & Variables.playground](%2301%20Constants%20%26%20Variables.playground)** - Variable declarations, constants, and type annotations
+- **[#02 Print & Comment.playground](%2302%20Print%20%26%20Comment.playground)** - Print statements, string interpolation, and comments
+- **[#03 Operators.playground](%2303%20Operators.playground)** - Arithmetic, assignment, and basic operators
+- **[#04 String & Character.playground](%2304%20String%20%26%20Character.playground)** - String manipulation and character operations
+- **[#05 Array.playground](%2305%20Array.playground)** - Array creation, manipulation, and operations
+- **[#06 Set.playground](%2306%20Set.playground)** - Set operations and collections
+- **[#07 Dictionary.playground](%2307%20Dictionary.playground)** - Dictionary creation and key-value operations
+- **[#08 Loops.playground](%2308%20Loops.playground)** - For-in loops, while loops, and iteration patterns
+- **[#09 Conditional Statements.playground](%2309%20Conditional%20Statements.playground)** - If-else, switch statements, and control flow
+- **[#10 Control Transfer Statements.playground](%2310%20Control%20Transfer%20Statements.playground)** - Break, continue, fallthrough, and guard
+- **[#33 Nested Types.playground](%2333%20Nested%20Types.playground)** - Nested types and type organization
+
+### Advanced Concepts Playgrounds
+
+Protocol-oriented programming and architecture patterns:
+
+- **[ProtocolsBootcamp.playground](ProtocolsBootcamp.playground)** - Protocol definitions, extensions, and protocol-oriented design
+- **[StructClassActorBootcamp.playground](StructClassActorBootcamp.playground)** - Struct vs Class vs Actor, value/reference types, and concurrency
 
 ### Practice Playgrounds
 
@@ -22,10 +37,16 @@ Algorithm implementations and coding challenges:
 
 - **[Ninja.playground](Ninja.playground)** - Username validation and set intersection algorithms
 - **[coderbyte.playground](coderbyte.playground)** - Cache implementation and JSON data parsing challenges
+- **[Count Elements Greater Than Previous Average.playground](Count%20Elements%20Greater%20Than%20Previous%20Average.playground)** - Array processing algorithm
+- **[FetchNextPage.playground](FetchNextPage.playground)** - Pagination and data fetching patterns
+- **[Sezzle Inc.playground](Sezzle%20Inc.playground)** - Company-specific coding challenges
+
+### UIKit Playgrounds
+
+iOS development and UI implementation:
+
 - **[Yassir.playground](Yassir.playground)** - UIKit networking with URLSession and async image loading
 - **[MyPlayground.playground](MyPlayground.playground)** - Protocol/extension patterns and UIKit components
-- **[Count Elements Greater Than Previous Average.playground](Count%20Elements%20Greater%20Than%20Previous%20Average.playground)** - Array processing algorithm
-- **[StructClassActorBootcamp.playground](StructClassActorBootcamp.playground)** - Swift concurrency concepts with struct, class, and actor comparisons
 
 ## Getting Started
 
@@ -64,14 +85,14 @@ open Ninja.xcworkspace
 
 Each playground contains:
 
-```
+```text
 playground-name.playground/
 ├── Contents.swift              # Main executable code
 ├── contents.xcplayground       # Playground metadata
 └── playground.xcworkspace/     # Xcode workspace data
 ```
 
-## Code Patterns
+## Common Patterns
 
 ### UIKit Playgrounds
 
@@ -110,10 +131,11 @@ print(solution("test"))  // Expected output
 
 Recommended order for beginners:
 
-1. Start with numbered tutorial playgrounds (#01, #02, #03)
-2. Explore algorithm challenges (Ninja, coderbyte)
-3. Study UIKit implementations (Yassir, MyPlayground)
-4. Deep dive into concurrency (StructClassActorBootcamp)
+1. **Swift Fundamentals** - Start with numbered tutorial playgrounds (#01-#10) to learn basic syntax and language features
+2. **Advanced Swift** - Study advanced concepts like nested types (#33) and protocol-oriented programming (ProtocolsBootcamp)
+3. **Type Systems & Concurrency** - Understand value vs reference types and actors (StructClassActorBootcamp)
+4. **Algorithm Practice** - Solve coding challenges (Ninja, coderbyte, FetchNextPage)
+5. **iOS Development** - Explore UIKit and networking (Yassir, MyPlayground)
 
 ## Contributing
 
