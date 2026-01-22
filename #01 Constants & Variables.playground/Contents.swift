@@ -163,7 +163,7 @@ print("\nExplicit Float: \(type(of: explicitFloat)) = \(explicitFloat)")
  - Constants can use ALL_CAPS for global constants, but camelCase is preferred
  */
 
-let userName = "John"
+let anotherUserName = "John"
 let userAge = 30
 var itemCount = 0
 var isLoggedIn = false
@@ -171,7 +171,7 @@ let maximumLoginAttempts = 5
 let π = 3.14159  // Unicode characters are allowed!
 
 print("\nNaming Examples:")
-print("userName: \(userName)")
+print("userName: \(anotherUserName)")
 print("userAge: \(userAge)")
 print("itemCount: \(itemCount)")
 print("isLoggedIn: \(isLoggedIn)")
