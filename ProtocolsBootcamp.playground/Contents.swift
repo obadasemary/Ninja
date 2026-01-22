@@ -85,6 +85,41 @@ struct TerternativeColorTheme: ColorThemeProtocol {
     let tertiary: Color = .purple
 }
 
+// MARK: - Data Source Protocol
+
+/// A protocol defining a data source contract for text content.
+///
+/// This demonstrates a simpler protocol with a single property requirement.
+/// Unlike ColorThemeProtocol which uses structs, this example shows how
+/// protocols work equally well with classes.
+///
+/// Key differences from ColorThemeProtocol:
+/// - Single property requirement vs. three
+/// - Implemented by classes (reference types) vs. structs (value types)
+/// - Mutable property (var) demonstrating runtime changes
+protocol DataSourceProtocol {
+    var text: String { get }
+}
+
+/// Default implementation of DataSourceProtocol.
+///
+/// Uses a class (reference type) to conform to the protocol.
+/// The text property is mutable, allowing the data source to be updated
+/// after initialization. This showcases how protocols don't dictate
+/// whether conforming types should be classes or structs.
+class DefaultDataSource: DataSourceProtocol {
+    var text: String = "Hello, World! from DefaultDataSource"
+}
+
+/// Alternative implementation of DataSourceProtocol.
+///
+/// Provides different default text while maintaining the same contract.
+/// This demonstrates how multiple classes can conform to the same protocol
+/// with different implementations, enabling polymorphic behavior.
+class AlternativeDataSource: DataSourceProtocol {
+    var text: String = "Hello, World! from AlternativeDataSource"
+}
+
 // MARK: - Protocol Usage Example
 
 /// Demonstrates protocol-based dependency injection and polymorphism.
@@ -103,12 +138,21 @@ struct ProtocolsBootcamp {
     /// Could be any type that implements the protocol.
     let colorTheme: ColorThemeProtocol = DefaultColorTheme()
 
-    /// Creates a text view styled with the protocol-defined colors.
+    /// Data source instance conforming to DataSourceProtocol.
+    /// Demonstrates using multiple protocols together for composition.
+    /// Could be swapped with AlternativeDataSource without changing code.
+    let dataSource: DataSourceProtocol = DefaultDataSource()
+
+    /// Creates a text view styled with protocol-defined colors and content.
     ///
-    /// This method uses the protocol's primary color without knowing
-    /// or caring about the specific theme implementation.
+    /// This method demonstrates protocol composition by using:
+    /// - `dataSource.text` for the content (from DataSourceProtocol)
+    /// - `colorTheme.primary` for styling (from ColorThemeProtocol)
+    ///
+    /// Neither the data source nor theme concrete types are known here,
+    /// only their protocol contracts. This enables flexible, testable code.
     func start() {
-        Text("Hello from Protocols Bootcamp!")
+        Text(dataSource.text)
             .foregroundColor(colorTheme.primary)
     }
 }
@@ -164,4 +208,58 @@ print("\nUsing protocol extension:")
 let defaultTheme = DefaultColorTheme()
 defaultTheme.printTheme()
 print("Color count: \(defaultTheme.allColors.count)")
+
+// MARK: - Protocol Composition Example
+
+/// Demonstrates using multiple protocols together.
+///
+/// This function accepts both protocols as parameters, showing how
+/// protocols can be composed to build flexible, reusable components.
+/// Neither concrete type is specified - only the protocol contracts.
+func createStyledView(
+    theme: ColorThemeProtocol,
+    dataSource: DataSourceProtocol
+) {
+    print("\nCreating view with:")
+    print("- Text: \(dataSource.text)")
+    print("- Primary Color: \(theme.primary)")
+}
+
+// Test different combinations of themes and data sources
+print("\nTesting protocol composition:")
+createStyledView(theme: DefaultColorTheme(), dataSource: DefaultDataSource())
+createStyledView(theme: AlternativeColorTheme(), dataSource: AlternativeDataSource())
+createStyledView(theme: TerternativeColorTheme(), dataSource: DefaultDataSource())
+
+// MARK: - Key Takeaways
+
+/*
+ PROTOCOL BEST PRACTICES:
+
+ 1. SINGLE RESPONSIBILITY
+    Each protocol should define one cohesive set of requirements.
+    Example: ColorThemeProtocol focuses only on colors.
+
+ 2. COMPOSITION OVER INHERITANCE
+    Combine multiple protocols instead of creating complex hierarchies.
+    Example: ProtocolsBootcamp uses both ColorTheme and DataSource protocols.
+
+ 3. PROTOCOL EXTENSIONS FOR DEFAULTS
+    Provide default implementations to reduce boilerplate.
+    Example: allColors and printTheme() added via extension.
+
+ 4. DEPENDENCY INJECTION
+    Accept protocols as parameters, not concrete types.
+    Example: createStyledView() accepts protocol types.
+
+ 5. VALUE VS REFERENCE TYPES
+    Protocols work with both structs and classes.
+    Example: ColorTheme uses structs, DataSource uses classes.
+
+ WHEN TO USE PROTOCOLS:
+ - When multiple types need to share behavior
+ - For dependency injection and testability
+ - To enable polymorphism without inheritance
+ - When designing flexible, extensible APIs
+ */
 
