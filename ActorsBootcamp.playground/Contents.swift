@@ -50,14 +50,14 @@ print("=== 2. THE SOLUTION: Actors ===\n")
 actor SafeBankAccount {
     var balance: Double = 0
 
-    func deposit(amount: Double) {
+    func deposit(amount: Double) async {
         let currentBalance = balance
         // Simulate some processing time
         try? await Task.sleep(nanoseconds: 1_000_000) // 0.001 seconds
         balance = currentBalance + amount
     }
 
-    func withdraw(amount: Double) {
+    func withdraw(amount: Double) async {
         let currentBalance = balance
         try? await Task.sleep(nanoseconds: 1_000_000)
         balance = currentBalance - amount
