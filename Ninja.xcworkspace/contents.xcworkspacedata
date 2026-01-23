@@ -2,6 +2,9 @@
 <Workspace
    version = "1.0">
    <FileRef
+      location = "group:ActorsBootcamp.playground">
+   </FileRef>
+   <FileRef
       location = "group:ProtocolsBootcamp.playground">
    </FileRef>
    <FileRef
