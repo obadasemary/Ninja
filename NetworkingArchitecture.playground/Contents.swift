@@ -2,8 +2,75 @@ import Foundation
 import Combine
 import PlaygroundSupport
 
+/*
+ # NetworkingArchitecture Playground
+
+ ## Overview
+ This playground demonstrates **Clean Architecture** principles applied to networking in Swift.
+ It showcases three different asynchronous patterns for handling network requests:
+
+ 1. **Completion Handlers** - Traditional callback-based approach
+ 2. **Combine** - Reactive programming with publishers and subscribers
+ 3. **Async/Await** - Modern Swift concurrency with structured concurrency
+
+ ## Architecture Layers
+
+ ### 1. Models (Domain Layer)
+ - Pure Swift structs representing business entities
+ - No dependencies on networking or frameworks
+ - Conform to `Codable` for JSON serialization
+
+ ### 2. Network Layer (Data Source)
+ - `APIClient` - Handles HTTP communication
+ - Abstracts URLSession details
+ - Converts raw data into domain models
+ - Provides protocol for dependency injection
+
+ ### 3. Repository Layer (Data Access)
+ - Abstracts data source implementation details
+ - Single source of truth for domain entities
+ - Can combine multiple data sources (network, cache, database)
+ - Depends on Network Layer protocol, not concrete implementation
+
+ ### 4. Use Case Layer (Business Logic)
+ - Contains domain-specific business rules
+ - Orchestrates data flow between repositories
+ - Applies transformations, filtering, sorting
+ - Represents specific user actions or system operations
+
+ ## Benefits of This Architecture
+
+ - **Testability**: Each layer can be tested independently with mocks
+ - **Separation of Concerns**: Each layer has a single, well-defined responsibility
+ - **Flexibility**: Easy to swap implementations (e.g., mock network for testing)
+ - **Scalability**: Clear structure for adding new features
+ - **Dependency Inversion**: High-level modules don't depend on low-level modules
+
+ ## Three Async Patterns Comparison
+
+ | Pattern           | Pros                              | Cons                          | Best For                    |
+ |-------------------|-----------------------------------|-------------------------------|-----------------------------|
+ | Completion Handler| Simple, widely understood         | Callback hell, error prone    | Legacy code, simple requests|
+ | Combine           | Powerful operators, composable    | Learning curve, verbose       | Reactive UIs, streams       |
+ | Async/Await       | Clean syntax, structured concurrency| Requires iOS 15+             | Modern apps, sequential ops |
+
+ ## Usage Examples
+ See the bottom of this file for practical examples demonstrating:
+ - Sequential API calls with all three patterns
+ - Parallel requests with async/await
+ - Error handling strategies
+ - Dependency injection in practice
+ */
+
 // MARK: - Models
 
+/// Represents a user in the system.
+///
+/// This is a domain model that represents the core business entity.
+/// It's independent of any networking or persistence logic.
+///
+/// - Note: Conforms to `Codable` for JSON serialization/deserialization
+/// - Note: Conforms to `Identifiable` for SwiftUI List support
 struct User: Codable, Identifiable {
     let id: Int
     let name: String
@@ -11,6 +78,10 @@ struct User: Codable, Identifiable {
     let username: String
 }
 
+/// Represents a blog post created by a user.
+///
+/// Each post is associated with a user via the `userId` property.
+/// This demonstrates a one-to-many relationship in the domain model.
 struct Post: Codable, Identifiable {
     let userId: Int
     let id: Int
@@ -20,6 +91,27 @@ struct Post: Codable, Identifiable {
 
 // MARK: - Network Error
 
+/// Comprehensive error types that can occur during network operations.
+///
+/// This enum provides type-safe error handling with associated values for additional context.
+/// By conforming to `LocalizedError`, it provides user-friendly error messages.
+///
+/// ## Error Cases
+///
+/// - `invalidURL`: The constructed URL is malformed
+/// - `invalidResponse`: Server response is not a valid HTTPURLResponse
+/// - `httpError`: Server returned a non-2xx status code
+/// - `decodingError`: JSON decoding failed (type mismatch, missing keys, etc.)
+/// - `networkError`: Underlying network failure (no connection, timeout, etc.)
+///
+/// ## Usage Example
+/// ```swift
+/// do {
+///     let users = try await apiClient.requestAsync(endpoint: "/users")
+/// } catch let error as NetworkError {
+///     print("Network error: \(error.localizedDescription)")
+/// }
+/// ```
 enum NetworkError: Error, LocalizedError {
     case invalidURL
     case invalidResponse
@@ -45,6 +137,35 @@ enum NetworkError: Error, LocalizedError {
 
 // MARK: - Network Layer (API Client)
 
+/// Protocol defining the network service contract.
+///
+/// This protocol enables **dependency injection** and **testability** by abstracting the network layer.
+/// Repositories depend on this protocol rather than the concrete `APIClient` implementation.
+///
+/// ## Three Async Patterns
+///
+/// Each method provides the same functionality using different async patterns:
+///
+/// 1. **Completion Handler** - `request(endpoint:completion:)`
+///    - Traditional callback-based approach
+///    - Widely compatible (iOS 13+)
+///    - Can lead to callback hell with nested requests
+///
+/// 2. **Combine** - `requestPublisher(endpoint:)`
+///    - Reactive programming with operators
+///    - Composable with other publishers
+///    - Requires iOS 13+, SwiftUI integration
+///
+/// 3. **Async/Await** - `requestAsync(endpoint:)`
+///    - Modern structured concurrency
+///    - Clean, linear code flow
+///    - Requires iOS 15+
+///
+/// ## Usage
+/// ```swift
+/// let apiClient: NetworkServiceProtocol = APIClient()
+/// let users: [User] = try await apiClient.requestAsync(endpoint: "/users")
+/// ```
 protocol NetworkServiceProtocol {
     // Completion Handler
     func request<T: Decodable>(
@@ -59,16 +180,67 @@ protocol NetworkServiceProtocol {
     func requestAsync<T: Decodable>(endpoint: String) async throws -> T
 }
 
+/// Concrete implementation of the network service.
+///
+/// This class handles all HTTP communication with the JSONPlaceholder API.
+/// It demonstrates the **adapter pattern** by wrapping `URLSession` and providing
+/// three different async interfaces.
+///
+/// ## Features
+///
+/// - Generic `Decodable` support for type-safe responses
+/// - Comprehensive error handling with typed errors
+/// - Dependency injection of `URLSession` for testing
+/// - Three async patterns for different use cases
+///
+/// ## Testing
+///
+/// The `URLSession` can be injected for testing:
+/// ```swift
+/// let mockSession = MockURLSession()
+/// let apiClient = APIClient(session: mockSession)
+/// ```
 class APIClient: NetworkServiceProtocol {
     private let baseURL = "https://jsonplaceholder.typicode.com"
     private let session: URLSession
 
+    /// Creates a new API client with the specified URLSession.
+    ///
+    /// - Parameter session: The URLSession to use for requests. Defaults to `.shared`.
     init(session: URLSession = .shared) {
         self.session = session
     }
 
     // MARK: - Completion Handler Implementation
 
+    /// Performs a network request using the completion handler pattern.
+    ///
+    /// This is the traditional callback-based approach to async networking in Swift.
+    /// The completion handler is called on a background thread when the request completes.
+    ///
+    /// ## Characteristics
+    ///
+    /// - **Pros**: Simple, widely understood, compatible with all iOS versions
+    /// - **Cons**: Can lead to callback hell, requires manual thread management
+    /// - **Best for**: Legacy codebases, simple one-off requests
+    ///
+    /// ## Example
+    /// ```swift
+    /// apiClient.request(endpoint: "/users") { (result: Result<[User], NetworkError>) in
+    ///     DispatchQueue.main.async {
+    ///         switch result {
+    ///         case .success(let users):
+    ///             print("Got \(users.count) users")
+    ///         case .failure(let error):
+    ///             print("Error: \(error)")
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - endpoint: The API endpoint path (e.g., "/users" or "/posts/1")
+    ///   - completion: Callback invoked with the result. Called on a background thread.
     func request<T: Decodable>(
         endpoint: String,
         completion: @escaping (Result<T, NetworkError>) -> Void
@@ -115,6 +287,38 @@ class APIClient: NetworkServiceProtocol {
 
     // MARK: - Combine Implementation
 
+    /// Performs a network request using the Combine framework.
+    ///
+    /// Returns a publisher that emits the decoded response or an error.
+    /// This enables reactive programming patterns and powerful operator composition.
+    ///
+    /// ## Characteristics
+    ///
+    /// - **Pros**: Composable with operators, automatic memory management, declarative
+    /// - **Cons**: Learning curve, can be verbose for simple cases
+    /// - **Best for**: Reactive UIs (SwiftUI), chaining multiple requests, data streams
+    ///
+    /// ## Example
+    /// ```swift
+    /// var cancellables = Set<AnyCancellable>()
+    ///
+    /// apiClient.requestPublisher(endpoint: "/users")
+    ///     .map { users in users.filter { $0.email.contains("@") } }
+    ///     .sink(
+    ///         receiveCompletion: { completion in
+    ///             if case .failure(let error) = completion {
+    ///                 print("Error: \(error)")
+    ///             }
+    ///         },
+    ///         receiveValue: { users in
+    ///             print("Got \(users.count) users")
+    ///         }
+    ///     )
+    ///     .store(in: &cancellables)
+    /// ```
+    ///
+    /// - Parameter endpoint: The API endpoint path (e.g., "/users" or "/posts/1")
+    /// - Returns: A publisher that emits the decoded response or a `NetworkError`
     func requestPublisher<T: Decodable>(endpoint: String) -> AnyPublisher<T, NetworkError> {
         guard let url = URL(string: baseURL + endpoint) else {
             return Fail(error: NetworkError.invalidURL).eraseToAnyPublisher()
@@ -149,6 +353,43 @@ class APIClient: NetworkServiceProtocol {
 
     // MARK: - Async/Await Implementation
 
+    /// Performs a network request using Swift's async/await pattern.
+    ///
+    /// This is the modern approach to asynchronous programming in Swift.
+    /// It provides structured concurrency with clean, linear code flow.
+    ///
+    /// ## Characteristics
+    ///
+    /// - **Pros**: Clean syntax, structured concurrency, automatic Task cancellation
+    /// - **Cons**: Requires iOS 15+, must be called from async context
+    /// - **Best for**: Modern apps, sequential operations, parallel requests with `async let`
+    ///
+    /// ## Example
+    /// ```swift
+    /// Task {
+    ///     do {
+    ///         let users: [User] = try await apiClient.requestAsync(endpoint: "/users")
+    ///         print("Got \(users.count) users")
+    ///
+    ///         // Sequential request
+    ///         let posts: [Post] = try await apiClient.requestAsync(endpoint: "/posts")
+    ///         print("Got \(posts.count) posts")
+    ///     } catch {
+    ///         print("Error: \(error)")
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// ## Parallel Requests
+    /// ```swift
+    /// async let users: [User] = apiClient.requestAsync(endpoint: "/users")
+    /// async let posts: [Post] = apiClient.requestAsync(endpoint: "/posts")
+    /// let (usersResult, postsResult) = try await (users, posts)
+    /// ```
+    ///
+    /// - Parameter endpoint: The API endpoint path (e.g., "/users" or "/posts/1")
+    /// - Returns: The decoded response of type `T`
+    /// - Throws: `NetworkError` if the request fails
     func requestAsync<T: Decodable>(endpoint: String) async throws -> T {
         guard let url = URL(string: baseURL + endpoint) else {
             throw NetworkError.invalidURL
@@ -179,6 +420,38 @@ class APIClient: NetworkServiceProtocol {
 
 // MARK: - Repository Layer
 
+/// Repository pattern for User entities.
+///
+/// The **Repository Pattern** provides an abstraction over data access logic.
+/// It acts as a collection-like interface for accessing domain objects.
+///
+/// ## Purpose
+///
+/// - Decouples business logic from data source implementation
+/// - Provides a single source of truth for User data
+/// - Can aggregate data from multiple sources (API, cache, database)
+/// - Simplifies testing by allowing mock implementations
+///
+/// ## Clean Architecture Benefits
+///
+/// In Clean Architecture, repositories belong to the **Interface Adapters** layer.
+/// They convert data from the format most convenient for use cases (domain models)
+/// to the format most convenient for external services (DTOs, network models).
+///
+/// - Use Cases depend on Repository **protocols** (dependency inversion)
+/// - Repository implementations depend on Network Layer protocols
+/// - Changes to the network layer don't affect use cases
+///
+/// ## Example
+/// ```swift
+/// // In production
+/// let apiClient: NetworkServiceProtocol = APIClient()
+/// let userRepository: UserRepositoryProtocol = UserRepository(networkService: apiClient)
+///
+/// // In tests
+/// let mockNetwork = MockNetworkService()
+/// let userRepository: UserRepositoryProtocol = UserRepository(networkService: mockNetwork)
+/// ```
 protocol UserRepositoryProtocol {
     // Completion Handler
     func getUsers(completion: @escaping (Result<[User], NetworkError>) -> Void)
@@ -193,6 +466,11 @@ protocol UserRepositoryProtocol {
     func getUserAsync(id: Int) async throws -> User
 }
 
+/// Repository pattern for Post entities.
+///
+/// Provides access to post data with the same three async patterns.
+/// Demonstrates how repositories can provide domain-specific query methods
+/// (like `getUserPosts`) beyond simple CRUD operations.
 protocol PostRepositoryProtocol {
     // Completion Handler
     func getPosts(completion: @escaping (Result<[Post], NetworkError>) -> Void)
@@ -209,9 +487,31 @@ protocol PostRepositoryProtocol {
 
 // MARK: - Repository Implementations
 
+/// Concrete implementation of User repository using the network service.
+///
+/// This class is a **thin wrapper** around the network service.
+/// In a real application, it might also:
+///
+/// - Cache responses in memory or disk
+/// - Merge data from multiple sources (network + local database)
+/// - Handle offline scenarios
+/// - Implement retry logic
+/// - Track loading states
+///
+/// ## Dependency Injection
+///
+/// The repository depends on `NetworkServiceProtocol`, not `APIClient`.
+/// This enables:
+/// - Testing with mock network services
+/// - Swapping implementations without changing the repository
+/// - Following the **Dependency Inversion Principle**
 class UserRepository: UserRepositoryProtocol {
     private let networkService: NetworkServiceProtocol
 
+    /// Creates a new user repository.
+    ///
+    /// - Parameter networkService: The network service to use for fetching users.
+    ///                             Can be a real `APIClient` or a mock for testing.
     init(networkService: NetworkServiceProtocol) {
         self.networkService = networkService
     }
@@ -287,6 +587,39 @@ class PostRepository: PostRepositoryProtocol {
 
 // MARK: - Use Case Layer
 
+/// Protocol for the "Get Users" use case.
+///
+/// ## What is a Use Case?
+///
+/// A **Use Case** (also called an Interactor) represents a single business operation
+/// or user action in your application. It contains the **business logic** specific to
+/// that operation.
+///
+/// ## Responsibilities
+///
+/// - Orchestrate data flow between repositories
+/// - Apply business rules and transformations
+/// - Coordinate multiple repositories if needed
+/// - Contain domain-specific logic (filtering, sorting, validation)
+/// - **NOT** responsible for presentation or data fetching
+///
+/// ## Why Use Cases?
+///
+/// - **Single Responsibility**: Each use case does one thing
+/// - **Testability**: Business logic is isolated and easy to test
+/// - **Reusability**: Use cases can be shared across ViewModels/ViewControllers
+/// - **Clarity**: Clear intent - the name describes what it does
+///
+/// ## Example Use Cases in a Real App
+///
+/// - `LoginUserUseCase` - Validates credentials and creates a session
+/// - `SearchProductsUseCase` - Searches products with filters and sorting
+/// - `CheckoutCartUseCase` - Validates cart, applies discounts, creates order
+///
+/// ## Clean Architecture Placement
+///
+/// Use Cases are in the **Application Business Rules** layer (innermost layer).
+/// They depend on repository protocols, not implementations.
 protocol GetUsersUseCaseProtocol {
     // Completion Handler
     func execute(completion: @escaping (Result<[User], NetworkError>) -> Void)
@@ -311,13 +644,48 @@ protocol GetUserPostsUseCaseprotocol {
 
 // MARK: - Use Case Implementations
 
+/// Implementation of the "Get Users" use case.
+///
+/// This use case demonstrates how business logic is applied in the use case layer.
+/// It fetches users from the repository and filters out users with empty emails.
+///
+/// ## Business Logic Example
+///
+/// In this example, the business rule is: "Only return users with valid email addresses."
+/// This logic lives in the use case, not in the repository or network layer.
+///
+/// ## Real-World Examples
+///
+/// In a production app, use cases might:
+/// - Combine data from multiple repositories
+/// - Apply complex business rules and calculations
+/// - Validate business constraints
+/// - Transform data for specific presentation needs
+/// - Log analytics events
+/// - Handle caching strategies
+///
+/// ## Testability
+///
+/// Use cases are highly testable because they:
+/// - Depend on repository protocols (can inject mocks)
+/// - Contain pure business logic
+/// - Have clear inputs and outputs
 class GetUsersUseCase: GetUsersUseCaseProtocol {
     private let userRepository: UserRepositoryProtocol
 
+    /// Creates a new use case instance.
+    ///
+    /// - Parameter userRepository: Repository for accessing user data.
+    ///                             Can be a real repository or mock for testing.
     init(userRepository: UserRepositoryProtocol) {
         self.userRepository = userRepository
     }
 
+    /// Executes the use case using completion handlers.
+    ///
+    /// Fetches all users and applies the business rule: filter out users with empty emails.
+    ///
+    /// - Parameter completion: Called with filtered users or error
     func execute(completion: @escaping (Result<[User], NetworkError>) -> Void) {
         userRepository.getUsers { result in
             switch result {
@@ -385,10 +753,67 @@ class GetUserPostsUseCase: GetUserPostsUseCaseprotocol {
 
 // MARK: - Unit Tests
 
+/*
+ ## Unit Testing Architecture
+
+ This playground demonstrates comprehensive unit testing of the Clean Architecture layers.
+
+ ### Testing Strategy
+
+ #### 1. Test Pyramid
+ - **Unit Tests**: Test each layer in isolation (what we're doing here)
+ - **Integration Tests**: Test layers working together
+ - **UI Tests**: Test the full app flow
+
+ #### 2. Dependency Injection Benefits
+ Because each layer depends on protocols, we can inject mocks for testing:
+
+ ```
+ Production:                    Testing:
+ UseCase → Repository → API     UseCase → MockRepository
+ Repository → Network           Repository → MockNetwork
+ ```
+
+ #### 3. What We're Testing
+
+ - **Repository Tests**: Verify repositories correctly delegate to network service
+ - **Use Case Tests**: Verify business logic is applied correctly
+ - **Error Handling**: Ensure errors propagate correctly
+ - **All Three Patterns**: Test completion handlers, Combine, and async/await
+
+ ### Mock Strategy
+
+ The `MockNetworkService` is a **test double** that:
+ - Implements `NetworkServiceProtocol`
+ - Returns configurable mock data
+ - Can simulate errors
+ - Doesn't make real network calls
+ - Enables fast, deterministic tests
+
+ This is the **Dependency Inversion Principle** in action:
+ - Production code depends on abstractions (protocols)
+ - Test code provides alternative implementations
+ - No changes needed to production code for testing
+ */
+
 import XCTest
 
 // MARK: - Mock Network Service
 
+/// Mock implementation of the network service for testing.
+///
+/// This test double allows us to test repositories and use cases
+/// without making real network calls.
+///
+/// ## Configuration
+///
+/// ```swift
+/// let mock = MockNetworkService()
+/// mock.shouldReturnError = false  // Simulate success
+/// mock.mockUsers = [testUser1, testUser2]
+/// mock.shouldReturnError = true   // Simulate failure
+/// mock.mockError = .httpError(statusCode: 500)
+/// ```
 class MockNetworkService: NetworkServiceProtocol {
     var shouldReturnError = false
     var mockError: NetworkError = .invalidResponse
@@ -817,6 +1242,52 @@ for testSuiteType in testSuites {
 
 // MARK: - Usage Examples
 
+/*
+ ## Practical Usage Examples
+
+ The following examples demonstrate the architecture in action with real API calls
+ to JSONPlaceholder (a free fake API for testing).
+
+ ### What You'll See
+
+ 1. **Completion Handler Pattern** - Traditional callback-based networking
+ 2. **Combine Pattern** - Reactive programming with publishers
+ 3. **Async/Await Pattern** - Modern structured concurrency
+ 4. **Parallel Requests** - Fetching multiple resources simultaneously with async/await
+ 5. **Error Handling** - Gracefully handling network failures
+
+ ### Choosing the Right Pattern
+
+ | Scenario                          | Recommended Pattern   | Why?                                      |
+ |-----------------------------------|-----------------------|-------------------------------------------|
+ | SwiftUI app (iOS 15+)             | Async/Await           | Clean syntax, works well with @MainActor  |
+ | SwiftUI app (iOS 13-14)           | Combine               | Native integration with @Published        |
+ | UIKit app with reactive updates   | Combine               | Easy to bind to UI updates                |
+ | Legacy codebase                   | Completion Handlers   | Compatibility, familiar to all developers |
+ | Multiple parallel requests        | Async/Await           | `async let` makes parallelism trivial     |
+ | Chaining many transformations     | Combine               | Rich operator library                     |
+
+ ### Dependency Injection in Practice
+
+ Notice how dependencies are created and injected:
+
+ ```swift
+ // 1. Create the concrete network service
+ let apiClient = APIClient()
+
+ // 2. Inject it into repositories (depend on protocol)
+ let userRepository = UserRepository(networkService: apiClient)
+
+ // 3. Inject repositories into use cases (depend on protocol)
+ let getUsersUseCase = GetUsersUseCase(userRepository: userRepository)
+ ```
+
+ This creates a **dependency graph** that flows one direction:
+ UseCase → Repository → NetworkService → URLSession
+
+ Each layer knows only about the layer immediately below it through protocols.
+ */
+
 print("=== Networking Architecture Playground ===\n")
 
 // Setup dependencies
@@ -953,3 +1424,67 @@ Task {
 PlaygroundPage.current.needsIndefiniteExecution = true
 
 print("\n⏳ Waiting for network requests to complete...\n")
+
+/*
+ ## Key Takeaways
+
+ ### Clean Architecture Benefits Demonstrated
+
+ ✅ **Testability**
+    - All layers tested in isolation
+    - Mock implementations for fast, reliable tests
+    - No need for actual network calls in tests
+
+ ✅ **Flexibility**
+    - Easy to swap from one async pattern to another
+    - Can change API client implementation without touching use cases
+    - Can add caching, offline support without refactoring
+
+ ✅ **Separation of Concerns**
+    - Models: Pure data structures
+    - Network Layer: HTTP communication
+    - Repository: Data access abstraction
+    - Use Cases: Business logic
+    - Each layer has one job and does it well
+
+ ✅ **Dependency Inversion**
+    - High-level modules (use cases) don't depend on low-level modules (network)
+    - Both depend on abstractions (protocols)
+    - Enables dependency injection for testing and flexibility
+
+ ### When to Use This Architecture
+
+ **Good For:**
+ - Medium to large applications
+ - Apps with complex business logic
+ - Projects with multiple developers
+ - Apps requiring high test coverage
+ - Long-term maintenance projects
+
+ **Overkill For:**
+ - Simple CRUD apps with minimal logic
+ - Prototypes and MVPs
+ - Apps with 1-2 screens
+ - Learning projects (unless learning architecture!)
+
+ ### Next Steps
+
+ To apply this architecture in your app:
+
+ 1. Define your domain models (pure Swift structs/classes)
+ 2. Create network error types and API client
+ 3. Define repository protocols for each entity
+ 4. Implement repositories using the network layer
+ 5. Create use cases for specific user actions
+ 6. Inject dependencies from the app's composition root
+ 7. Write unit tests for each layer
+
+ ### Further Reading
+
+ - Clean Architecture by Robert C. Martin
+ - SOLID Principles
+ - Dependency Injection in iOS
+ - Repository Pattern
+ - Swift Concurrency (async/await)
+ - Combine Framework
+ */
