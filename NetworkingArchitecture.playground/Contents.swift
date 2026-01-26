@@ -135,6 +135,159 @@ enum NetworkError: Error, LocalizedError {
     }
 }
 
+// MARK: - Async Pattern Conversion Utilities
+
+/// Utilities for converting between different async patterns.
+///
+/// These extensions provide convenient methods to convert between:
+/// - Completion handlers → Combine
+/// - Completion handlers → Async/Await
+/// - Combine → Async/Await
+///
+/// ## Use Cases
+///
+/// - **Legacy Integration**: Convert old completion-based APIs to modern async/await
+/// - **Library Bridging**: Wrap third-party completion-based libraries with Combine
+/// - **Migration**: Gradually migrate from one pattern to another
+/// - **Flexibility**: Provide multiple interfaces for the same functionality
+///
+/// ## Examples
+///
+/// ```swift
+/// // Convert completion to Combine
+/// let publisher: AnyPublisher<[User], NetworkError> = Future { promise in
+///     repository.getUsers(completion: promise)
+/// }.eraseToAnyPublisher()
+///
+/// // Convert completion to async/await
+/// let users = try await withCheckedThrowingContinuation { continuation in
+///     repository.getUsers { result in
+///         continuation.resume(with: result)
+///     }
+/// }
+/// ```
+
+/// Extension providing utilities to convert completion-based methods to Combine publishers.
+extension AnyPublisher {
+    /// Creates a publisher from a completion-based method.
+    ///
+    /// This utility wraps any completion-based API and converts it to a Combine publisher.
+    ///
+    /// ## Example
+    /// ```swift
+    /// // In Repository or Use Case
+    /// func getUsersPublisher() -> AnyPublisher<[User], NetworkError> {
+    ///     AnyPublisher.fromCompletion { completion in
+    ///         self.getUsers(completion: completion)
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// - Parameter work: A closure that performs work and calls the completion handler
+    /// - Returns: A publisher that emits the result or error
+    static func fromCompletion(
+        _ work: @escaping (@escaping (Result<Output, Failure>) -> Void) -> Void
+    ) -> AnyPublisher<Output, Failure> where Failure: Error {
+        Future<Output, Failure> { promise in
+            work(promise)
+        }
+        .eraseToAnyPublisher()
+    }
+}
+
+/// Extension providing utilities to convert Combine publishers to async/await.
+extension AnyPublisher {
+    /// Converts a Combine publisher to an async/await result.
+    ///
+    /// This method bridges the gap between Combine's reactive world and Swift's async/await.
+    /// It waits for the first value emitted by the publisher and returns it.
+    ///
+    /// ## Characteristics
+    ///
+    /// - Returns the first value emitted by the publisher
+    /// - Throws an error if the publisher fails
+    /// - Cancels the subscription after receiving the first value
+    ///
+    /// ## Example
+    /// ```swift
+    /// // In Use Case
+    /// func executeAsync() async throws -> [User] {
+    ///     try await executePublisher().toAsync()
+    /// }
+    /// ```
+    ///
+    /// ## Note
+    /// For streams that emit multiple values, consider using `AsyncStream` or `.values` (iOS 15+)
+    ///
+    /// - Returns: The first value emitted by the publisher
+    /// - Throws: The error if the publisher fails
+    func toAsync() async throws -> Output where Failure: Error {
+        try await withCheckedThrowingContinuation { continuation in
+            var cancellable: AnyCancellable?
+            var isResumed = false
+
+            cancellable = self.sink(
+                receiveCompletion: { completion in
+                    if !isResumed {
+                        isResumed = true
+                        switch completion {
+                        case .finished:
+                            break
+                        case .failure(let error):
+                            continuation.resume(throwing: error)
+                        }
+                    }
+                    cancellable?.cancel()
+                },
+                receiveValue: { value in
+                    if !isResumed {
+                        isResumed = true
+                        continuation.resume(returning: value)
+                    }
+                    cancellable?.cancel()
+                }
+            )
+        }
+    }
+}
+
+/// Namespace for completion-to-async utilities.
+enum AsyncBridge {
+    /// Converts a completion-based method to async/await.
+    ///
+    /// This utility wraps any completion-based API and converts it to async/await.
+    /// It uses Swift's `withCheckedThrowingContinuation` for safe continuation handling.
+    ///
+    /// ## Example
+    /// ```swift
+    /// // In Repository or Use Case
+    /// func getUsersAsync() async throws -> [User] {
+    ///     try await AsyncBridge.fromCompletion { completion in
+    ///         self.getUsers(completion: completion)
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// ## Safety
+    ///
+    /// - Uses `withCheckedThrowingContinuation` to ensure continuation is resumed exactly once
+    /// - Converts `Result<T, E>` to async/await's natural throw mechanism
+    /// - Properly propagates errors through the async context
+    ///
+    /// - Parameter work: A closure that performs work and calls the completion handler
+    /// - Returns: The success value from the completion
+    /// - Throws: The error from the completion if it failed
+    static func fromCompletion<T, E: Error>(
+        _ work: @escaping (@escaping (Result<T, E>) -> Void) -> Void
+    ) async throws -> T {
+        try await withCheckedThrowingContinuation { continuation in
+            work { result in
+                continuation.resume(with: result)
+            }
+        }
+    }
+}
+
 // MARK: - Network Layer (API Client)
 
 /// Protocol defining the network service contract.
@@ -750,6 +903,319 @@ class GetUserPostsUseCase: GetUserPostsUseCaseprotocol {
         return posts.sorted { $0.title < $1.title }
     }
 }
+
+// MARK: - Conversion Utilities Demo
+
+/*
+ ## Async Pattern Conversion Examples
+
+ This section demonstrates how to use the conversion utilities to transform
+ between completion handlers, Combine, and async/await patterns.
+
+ ### Conversion Scenarios
+
+ 1. **Completion → Combine**: Wrap legacy APIs in reactive publishers
+ 2. **Completion → Async/Await**: Modernize callback-based code
+ 3. **Combine → Async/Await**: Bridge reactive code with structured concurrency
+ */
+
+/// Example: Repository using conversion utilities
+class ConvertibleUserRepository {
+    private let networkService: NetworkServiceProtocol
+
+    init(networkService: NetworkServiceProtocol) {
+        self.networkService = networkService
+    }
+
+    // Original completion-based method
+    func getUsers(completion: @escaping (Result<[User], NetworkError>) -> Void) {
+        networkService.request(endpoint: "/users", completion: completion)
+    }
+
+    // MARK: - Completion → Combine Conversion
+
+    /// Converts the completion-based getUsers to a Combine publisher.
+    ///
+    /// This demonstrates how to wrap a completion-based method in a publisher
+    /// using the `AnyPublisher.fromCompletion` utility.
+    ///
+    /// ## Example Usage
+    /// ```swift
+    /// repository.getUsersPublisherFromCompletion()
+    ///     .sink(
+    ///         receiveCompletion: { _ in },
+    ///         receiveValue: { users in print(users) }
+    ///     )
+    ///     .store(in: &cancellables)
+    /// ```
+    func getUsersPublisherFromCompletion() -> AnyPublisher<[User], NetworkError> {
+        AnyPublisher.fromCompletion { completion in
+            self.getUsers(completion: completion)
+        }
+    }
+
+    // MARK: - Completion → Async/Await Conversion
+
+    /// Converts the completion-based getUsers to async/await.
+    ///
+    /// This demonstrates how to wrap a completion-based method in async/await
+    /// using the `AsyncBridge.fromCompletion` utility.
+    ///
+    /// ## Example Usage
+    /// ```swift
+    /// Task {
+    ///     let users = try await repository.getUsersAsyncFromCompletion()
+    ///     print(users)
+    /// }
+    /// ```
+    func getUsersAsyncFromCompletion() async throws -> [User] {
+        try await AsyncBridge.fromCompletion { completion in
+            self.getUsers(completion: completion)
+        }
+    }
+}
+
+/// Example: Use Case using conversion utilities
+class ConvertibleGetUsersUseCase {
+    private let userRepository: ConvertibleUserRepository
+
+    init(userRepository: ConvertibleUserRepository) {
+        self.userRepository = userRepository
+    }
+
+    // Original completion-based method with business logic
+    func execute(completion: @escaping (Result<[User], NetworkError>) -> Void) {
+        userRepository.getUsers { result in
+            switch result {
+            case .success(let users):
+                let filteredUsers = users.filter { !$0.email.isEmpty }
+                completion(.success(filteredUsers))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    // MARK: - Completion → Combine Conversion
+
+    /// Converts the completion-based execute to a Combine publisher.
+    ///
+    /// This shows how to apply business logic while converting to Combine.
+    func executePublisherFromCompletion() -> AnyPublisher<[User], NetworkError> {
+        AnyPublisher.fromCompletion { completion in
+            self.execute(completion: completion)
+        }
+    }
+
+    // MARK: - Completion → Async/Await Conversion
+
+    /// Converts the completion-based execute to async/await.
+    ///
+    /// This shows how to apply business logic while converting to async/await.
+    func executeAsyncFromCompletion() async throws -> [User] {
+        try await AsyncBridge.fromCompletion { completion in
+            self.execute(completion: completion)
+        }
+    }
+
+    // MARK: - Combine → Async/Await Conversion
+
+    /// Demonstrates converting a Combine publisher to async/await.
+    ///
+    /// This is useful when you have a Combine-based API but need to call it
+    /// from an async context.
+    func executeAsyncFromPublisher() async throws -> [User] {
+        try await userRepository.getUsersPublisherFromCompletion()
+            .map { users in
+                // Apply business logic in the Combine chain
+                users.filter { !$0.email.isEmpty }
+            }
+            .toAsync()
+    }
+}
+
+// MARK: - Conversion Demo Usage
+
+print("\n" + String(repeating: "=", count: 50))
+print("🔄 ASYNC PATTERN CONVERSION DEMO")
+print(String(repeating: "=", count: 50) + "\n")
+
+let convertibleRepo = ConvertibleUserRepository(networkService: apiClient)
+let convertibleUseCase = ConvertibleGetUsersUseCase(userRepository: convertibleRepo)
+
+// Example 1: Completion → Combine
+print("1️⃣ Converting Completion to Combine\n")
+convertibleRepo.getUsersPublisherFromCompletion()
+    .sink(
+        receiveCompletion: { completion in
+            if case .failure(let error) = completion {
+                print("❌ Error: \(error)")
+            }
+        },
+        receiveValue: { users in
+            print("✅ Converted completion to Combine: \(users.count) users")
+        }
+    )
+    .store(in: &cancellables)
+
+// Example 2: Completion → Async/Await
+print("\n2️⃣ Converting Completion to Async/Await\n")
+Task {
+    do {
+        let users = try await convertibleRepo.getUsersAsyncFromCompletion()
+        print("✅ Converted completion to async/await: \(users.count) users")
+    } catch {
+        print("❌ Error: \(error)")
+    }
+}
+
+// Example 3: Combine → Async/Await
+print("\n3️⃣ Converting Combine to Async/Await\n")
+Task {
+    do {
+        let users = try await convertibleUseCase.executeAsyncFromPublisher()
+        print("✅ Converted Combine to async/await: \(users.count) users")
+        print("   (with business logic applied)")
+    } catch {
+        print("❌ Error: \(error)")
+    }
+}
+
+print("\n" + String(repeating: "=", count: 50) + "\n")
+
+/*
+ ## Conversion Utilities - When to Use
+
+ ### 1. Completion → Combine (AnyPublisher.fromCompletion)
+
+ **Use When:**
+ - You have a legacy completion-based API
+ - You want to use Combine operators (map, flatMap, combineLatest, etc.)
+ - You need to compose multiple async operations reactively
+ - You're building a SwiftUI app with @Published properties
+
+ **Benefits:**
+ - Access to powerful Combine operators
+ - Easy chaining and composition
+ - Automatic memory management with AnyCancellable
+ - Natural fit for reactive UIs
+
+ **Example Use Case:**
+ ```swift
+ // Combine multiple APIs reactively
+ let publisher = repository.getUsersPublisherFromCompletion()
+     .flatMap { users -> AnyPublisher<[Post], NetworkError> in
+         repository.getPostsPublisherFromCompletion()
+     }
+     .map { posts in posts.filter { $0.title.contains("Swift") } }
+ ```
+
+ ### 2. Completion → Async/Await (AsyncBridge.fromCompletion)
+
+ **Use When:**
+ - You're modernizing a legacy codebase
+ - You want clean, linear async code
+ - You're targeting iOS 15+
+ - You need to use Task groups or structured concurrency
+
+ **Benefits:**
+ - Clean, readable code without nested callbacks
+ - Native error handling with try/catch
+ - Works seamlessly with @MainActor
+ - Easy to reason about sequential operations
+
+ **Example Use Case:**
+ ```swift
+ // Clean sequential operations
+ func loadUserData() async throws {
+     let users = try await repository.getUsersAsyncFromCompletion()
+     let firstUser = users.first!
+     let posts = try await repository.getUserPostsAsyncFromCompletion(userId: firstUser.id)
+     // No callback hell!
+ }
+ ```
+
+ ### 3. Combine → Async/Await (AnyPublisher.toAsync)
+
+ **Use When:**
+ - You have a Combine-based library but need async/await interface
+ - You're gradually migrating from Combine to async/await
+ - You want to use Combine operators then await the final result
+ - You need to call Combine APIs from async functions
+
+ **Benefits:**
+ - Bridge between reactive and structured concurrency
+ - Use Combine's powerful operators, then await the result
+ - Simplifies migration path
+ - Best of both worlds
+
+ **Example Use Case:**
+ ```swift
+ // Use Combine operators, then await
+ func getFilteredUsers() async throws -> [User] {
+     try await repository.getUsersPublisher()
+         .map { $0.filter { $0.email.contains("@") } }
+         .map { $0.sorted { $0.name < $1.name } }
+         .toAsync()
+ }
+ ```
+
+ ### Conversion Pattern Matrix
+
+ | From             | To               | Use                              | Method                           |
+ |------------------|------------------|----------------------------------|----------------------------------|
+ | Completion       | Combine          | Reactive composition             | `AnyPublisher.fromCompletion`   |
+ | Completion       | Async/Await      | Modern sequential code           | `AsyncBridge.fromCompletion`    |
+ | Combine          | Async/Await      | Await reactive streams           | `publisher.toAsync()`           |
+
+ ### Migration Strategy
+
+ **Gradual Migration Approach:**
+
+ 1. **Phase 1**: Add conversion methods alongside existing APIs
+    ```swift
+    // Keep existing
+    func getUsers(completion: ...)
+    // Add new
+    func getUsersAsync() async throws -> [User] {
+        try await AsyncBridge.fromCompletion { self.getUsers(completion: $0) }
+    }
+    ```
+
+ 2. **Phase 2**: Migrate callers to new APIs gradually
+ 3. **Phase 3**: Deprecate old APIs
+ 4. **Phase 4**: Remove deprecated APIs after migration
+
+ **Full Rewrite Approach:**
+
+ 1. Choose target pattern (usually async/await for new code)
+ 2. Rewrite all methods in new pattern
+ 3. Use conversion utilities only at boundaries (e.g., third-party SDKs)
+
+ ### Best Practices
+
+ ✅ **Do:**
+ - Use conversions at architecture boundaries
+ - Document which pattern is "canonical" for your codebase
+ - Be consistent within each module
+ - Use conversion utilities for third-party libraries
+
+ ❌ **Don't:**
+ - Convert back and forth repeatedly in the same call chain
+ - Mix patterns unnecessarily in new code
+ - Use conversions as a substitute for proper refactoring
+ - Forget to handle cancellation properly
+
+ ### Performance Considerations
+
+ - **Completion handlers**: Lowest overhead, most direct
+ - **Combine**: Some overhead from publisher machinery, but negligible for most apps
+ - **Async/Await**: Optimized by compiler, similar to completion handlers
+ - **Conversions**: Small overhead from bridging, acceptable for most use cases
+
+ The performance difference is typically insignificant compared to network I/O.
+ Choose based on code clarity and maintainability, not micro-optimization.
+ */
 
 // MARK: - Unit Tests
 
