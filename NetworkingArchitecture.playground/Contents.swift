@@ -1083,6 +1083,387 @@ Task {
 
 print("\n" + String(repeating: "=", count: 50) + "\n")
 
+// MARK: - Manual Conversion Examples (Non-Generic)
+
+/*
+ ## Manual Pattern Conversion - Step by Step
+
+ This section shows how to manually convert between async patterns WITHOUT using
+ the generic utility functions. This is educational to understand what happens
+ under the hood.
+
+ ### Learning Objectives
+
+ - Understand the mechanics of each pattern
+ - See how business logic is applied in each pattern
+ - Learn when to use each approach
+ - Master the conversion without relying on utilities
+ */
+
+/// Example: Manual conversions in Use Case layer
+class ManualConversionUseCase {
+    private let userRepository: UserRepositoryProtocol
+
+    init(userRepository: UserRepositoryProtocol) {
+        self.userRepository = userRepository
+    }
+
+    // MARK: - 1. Original: Completion Handler Pattern
+
+    /// Original completion-based method with business logic.
+    ///
+    /// This is the traditional approach:
+    /// - Call repository with completion handler
+    /// - Handle result in the completion closure
+    /// - Apply business logic in success case
+    /// - Forward error in failure case
+    func execute(completion: @escaping (Result<[User], NetworkError>) -> Void) {
+        userRepository.getUsers { result in
+            switch result {
+            case .success(let users):
+                // Apply business logic here (filtering, sorting, transformation, etc.)
+                let filteredUsers = users.filter { !$0.email.isEmpty }
+                completion(.success(filteredUsers))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    // MARK: - 2. Manual Conversion: Completion → Combine
+
+    /// Manually converts completion-based code to Combine.
+    ///
+    /// ## Conversion Steps:
+    ///
+    /// 1. Wrap the completion-based call in a `Future` publisher
+    /// 2. The `Future` takes a `promise` closure (which is just a completion handler)
+    /// 3. Call the completion-based method and pass the promise as the completion
+    /// 4. Use `.map` operator to apply business logic
+    /// 5. Erase to `AnyPublisher` for type erasure
+    ///
+    /// ## Key Points:
+    /// - `Future` bridges completion handlers to Combine
+    /// - `promise` is the completion handler that fulfills the Future
+    /// - Business logic moves to Combine operators (`.map`, `.filter`, etc.)
+    /// - Errors propagate automatically through the publisher
+    func executePublisher() -> AnyPublisher<[User], NetworkError> {
+        Future<[User], NetworkError> { promise in
+            // Call the completion-based repository method
+            self.userRepository.getUsers { result in
+                // The promise is just a completion handler
+                // Pass the result directly to it
+                promise(result)
+            }
+        }
+        .map { users in
+            // Apply business logic using Combine operators
+            users.filter { !$0.email.isEmpty }
+        }
+        .eraseToAnyPublisher()
+    }
+
+    // Alternative: Inline version without Future
+    /// Alternative approach: Handle success/failure explicitly in Future.
+    ///
+    /// This version shows explicit success/failure handling instead of
+    /// passing the result directly.
+    func executePublisherAlternative() -> AnyPublisher<[User], NetworkError> {
+        Future<[User], NetworkError> { promise in
+            self.userRepository.getUsers { result in
+                switch result {
+                case .success(let users):
+                    // Filter first, then send to promise
+                    let filteredUsers = users.filter { !$0.email.isEmpty }
+                    promise(.success(filteredUsers))
+                case .failure(let error):
+                    promise(.failure(error))
+                }
+            }
+        }
+        .eraseToAnyPublisher()
+    }
+
+    // MARK: - 3. Manual Conversion: Completion → Async/Await
+
+    /// Manually converts completion-based code to async/await.
+    ///
+    /// ## Conversion Steps:
+    ///
+    /// 1. Mark function as `async throws`
+    /// 2. Use `withCheckedThrowingContinuation` to bridge to completion handler
+    /// 3. Call the completion-based method inside the continuation
+    /// 4. Resume the continuation with the result
+    /// 5. Apply business logic after the `await` (not in the completion)
+    ///
+    /// ## Key Points:
+    /// - `withCheckedThrowingContinuation` bridges completion to async/await
+    /// - `continuation.resume(with: result)` converts Result to throw/return
+    /// - Business logic is applied AFTER the await (sequential, linear code)
+    /// - Errors are thrown naturally instead of being passed to completion
+    /// - "Checked" means Swift verifies continuation is resumed exactly once
+    func executeAsync() async throws -> [User] {
+        // Step 1: Bridge completion to async/await
+        let users = try await withCheckedThrowingContinuation { continuation in
+            // Step 2: Call the completion-based repository method
+            self.userRepository.getUsers { result in
+                // Step 3: Resume the continuation with the result
+                // This converts Result<[User], NetworkError> to:
+                // - return [User] on success
+                // - throw NetworkError on failure
+                continuation.resume(with: result)
+            }
+        }
+
+        // Step 4: Apply business logic after the await
+        // This is clean, sequential code - no nested closures!
+        let filteredUsers = users.filter { !$0.email.isEmpty }
+        return filteredUsers
+    }
+
+    // Alternative: More explicit version
+    /// Alternative approach: Handle success/failure explicitly.
+    ///
+    /// This version shows manual switch on result instead of using
+    /// `continuation.resume(with:)`.
+    func executeAsyncAlternative() async throws -> [User] {
+        try await withCheckedThrowingContinuation { continuation in
+            self.userRepository.getUsers { result in
+                switch result {
+                case .success(let users):
+                    // Apply business logic
+                    let filteredUsers = users.filter { !$0.email.isEmpty }
+                    // Resume with filtered users
+                    continuation.resume(returning: filteredUsers)
+                case .failure(let error):
+                    // Resume by throwing the error
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
+    // MARK: - 4. Manual Conversion: Combine → Async/Await
+
+    /// Manually converts Combine publisher to async/await.
+    ///
+    /// ## Conversion Steps:
+    ///
+    /// 1. Mark function as `async throws`
+    /// 2. Use `withCheckedThrowingContinuation` to await the publisher
+    /// 3. Subscribe to the publisher with `.sink`
+    /// 4. Store the cancellable to prevent premature deallocation
+    /// 5. Resume continuation on `receiveValue` (success)
+    /// 6. Resume continuation on `receiveCompletion` with failure (error)
+    ///
+    /// ## Key Points:
+    /// - Must store `AnyCancellable` in a variable to keep subscription alive
+    /// - Handle both `receiveCompletion` and `receiveValue`
+    /// - Cancel the subscription after receiving the first value
+    /// - Use a flag to ensure continuation is resumed only once
+    func executeAsyncFromPublisher() async throws -> [User] {
+        try await withCheckedThrowingContinuation { continuation in
+            var cancellable: AnyCancellable?
+            var isResumed = false
+
+            // Subscribe to the publisher
+            cancellable = self.executePublisher()
+                .sink(
+                    receiveCompletion: { completion in
+                        // Handle completion (success or failure)
+                        if !isResumed {
+                            isResumed = true
+                            switch completion {
+                            case .finished:
+                                // Success - value was already received in receiveValue
+                                break
+                            case .failure(let error):
+                                // Error - resume by throwing
+                                continuation.resume(throwing: error)
+                            }
+                        }
+                        // Clean up
+                        cancellable?.cancel()
+                    },
+                    receiveValue: { users in
+                        // Handle the emitted value
+                        if !isResumed {
+                            isResumed = true
+                            // Resume with the users
+                            continuation.resume(returning: users)
+                        }
+                        // Clean up
+                        cancellable?.cancel()
+                    }
+                )
+
+            // Note: cancellable must be stored, otherwise subscription
+            // is cancelled immediately and continuation never resumes
+        }
+    }
+}
+
+// MARK: - Manual Conversion Demo
+
+print("📚 MANUAL CONVERSION EXAMPLES (Non-Generic)\n")
+print(String(repeating: "=", count: 50) + "\n")
+
+let manualUseCase = ManualConversionUseCase(userRepository: userRepository)
+
+// Example 1: Original Completion Handler
+print("1️⃣ Original: Completion Handler\n")
+manualUseCase.execute { result in
+    switch result {
+    case .success(let users):
+        print("✅ Completion: Got \(users.count) users")
+        print("   (with business logic applied)")
+    case .failure(let error):
+        print("❌ Error: \(error)")
+    }
+}
+
+// Example 2: Manual Conversion to Combine
+print("\n2️⃣ Manual Conversion: Completion → Combine\n")
+manualUseCase.executePublisher()
+    .sink(
+        receiveCompletion: { completion in
+            if case .failure(let error) = completion {
+                print("❌ Error: \(error)")
+            }
+        },
+        receiveValue: { users in
+            print("✅ Combine: Got \(users.count) users")
+            print("   (converted from completion)")
+        }
+    )
+    .store(in: &cancellables)
+
+// Example 3: Manual Conversion to Async/Await
+print("\n3️⃣ Manual Conversion: Completion → Async/Await\n")
+Task {
+    do {
+        let users = try await manualUseCase.executeAsync()
+        print("✅ Async/Await: Got \(users.count) users")
+        print("   (converted from completion)")
+    } catch {
+        print("❌ Error: \(error)")
+    }
+}
+
+// Example 4: Manual Conversion from Combine to Async/Await
+print("\n4️⃣ Manual Conversion: Combine → Async/Await\n")
+Task {
+    do {
+        let users = try await manualUseCase.executeAsyncFromPublisher()
+        print("✅ Async/Await: Got \(users.count) users")
+        print("   (converted from Combine)")
+    } catch {
+        print("❌ Error: \(error)")
+    }
+}
+
+print("\n" + String(repeating: "=", count: 50) + "\n")
+
+/*
+ ## Key Learning Points
+
+ ### 1. Completion → Combine (Using Future)
+
+ **Pattern:**
+ ```swift
+ Future<Output, Failure> { promise in
+     someCompletionBasedMethod { result in
+         promise(result)  // promise is just a completion handler!
+     }
+ }
+ .map { value in /* business logic */ }
+ .eraseToAnyPublisher()
+ ```
+
+ **When to use:**
+ - Wrapping legacy APIs
+ - Building reactive pipelines
+ - Need Combine operators
+
+ ### 2. Completion → Async/Await (Using Continuation)
+
+ **Pattern:**
+ ```swift
+ let result = try await withCheckedThrowingContinuation { continuation in
+     someCompletionBasedMethod { result in
+         continuation.resume(with: result)
+     }
+ }
+ // Apply business logic here
+ let processed = processResult(result)
+ return processed
+ ```
+
+ **When to use:**
+ - Modernizing codebases
+ - Need sequential async operations
+ - iOS 15+ target
+
+ ### 3. Combine → Async/Await (Using sink + continuation)
+
+ **Pattern:**
+ ```swift
+ try await withCheckedThrowingContinuation { continuation in
+     var cancellable: AnyCancellable?
+     cancellable = publisher.sink(
+         receiveCompletion: { completion in
+             if case .failure(let error) = completion {
+                 continuation.resume(throwing: error)
+             }
+             cancellable?.cancel()
+         },
+         receiveValue: { value in
+             continuation.resume(returning: value)
+             cancellable?.cancel()
+         }
+     )
+ }
+ ```
+
+ **When to use:**
+ - Migrating from Combine to async/await
+ - Need to call Combine code from async context
+ - Want to use Combine operators then await result
+
+ ### Comparison: Where Business Logic Goes
+
+ | Pattern              | Where to Apply Business Logic           |
+ |----------------------|-----------------------------------------|
+ | Completion Handler   | Inside the completion closure           |
+ | Combine              | In `.map` and other operators           |
+ | Async/Await          | After the `await` (sequential code)     |
+
+ ### Error Handling Differences
+
+ | Pattern              | Error Handling                          |
+ |----------------------|-----------------------------------------|
+ | Completion Handler   | `case .failure(let error)` in switch    |
+ | Combine              | `.mapError`, `receiveCompletion`        |
+ | Async/Await          | `try/catch` - natural Swift errors      |
+
+ ### Why Understanding Manual Conversion Matters
+
+ ✅ **Debugging**: Know what's happening under the hood when things break
+ ✅ **Third-party Integration**: Many libraries only provide one pattern
+ ✅ **Legacy Code**: Need to bridge old and new APIs
+ ✅ **Interviews**: Common iOS interview question
+ ✅ **Architecture Decisions**: Choose the right pattern for your use case
+
+ ### Pro Tips
+
+ 1. **Completion → Combine**: The `promise` parameter in `Future` IS a completion handler
+ 2. **Completion → Async/Await**: Always use `withCheckedThrowingContinuation` (with "Checked")
+    for safety during development. Swift will crash if you resume multiple times.
+ 3. **Combine → Async/Await**: Must store the `AnyCancellable` or subscription cancels immediately
+ 4. **Business Logic**: In async/await, business logic is clean and sequential AFTER the await
+ 5. **Error Propagation**: `continuation.resume(with: result)` automatically handles success/failure
+ */
+
 /*
  ## Conversion Utilities - When to Use
 
